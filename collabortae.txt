@@ -1,0 +1,232 @@
+TODO:
+T5:
+- implementation of a specific algorithm
+- add to benchmark
+
+- test cases
+- self reflection
+- flake 8
+
+T1 Analysis:
+- how code follows the SOLID principle
+    - single responsibility
+        - The code has separate classes for loading data and algorithm, respectively, and each class has responsibility only for the implementation 
+        of its own task. For example, for reading datasets, there is a DatasetReader with two separate functions for online algorithm and offline 
+        algorithm to get correct formatted input. To retrieve capacity and weights from a file, the code uses another class extended from
+        DatasetReader. There are also different classes for different implementations of algorithms. It improves the code's readability and reduces
+        code redundancy so that each function does not have excessive lines of code. Any new algorithms can be easily added without unexpected 
+        side effects since there is no overlapping implementation between each function.
+    - open and close
+        - The basic DatasetReader abstract class has two methods that produce outputs for online and offline algorithms. These methods are 
+        statics and will not be modified; thus, closed for modification. On the other hand, the DatasetReader class also has the 
+        _load_data_from_disk private method, which is the only method that any additional file readers need to implement. Thus, it is convenient
+        for programmers to extend the variety of algorithms, that is, open for extension.
+        - For similar reasons, the model basic abstract class is also open for extension and closed for modification since any concrete 
+        implementation of it shares the same __call__ method (close for modification) while having its individual _process methods (open for 
+        extend).
+    - dependency inversion
+        - To load data into offline and online algorithms, the _load_data_from_disk method is called to extract information from various files. 
+        It is worthy-noticing in this process that we are calling this method from the abstract class level rather than calling a specific method
+        that depends on any implementation of the abstract class. As a result, both online and offline algorithms can obtain the values they require
+        without having any knowledge of how _load_data_from_disk is implemented. In other words, the loading data process depends on the _load_data_from_disk
+        abstract method instead of its implementation, and for this reason, the dependency chain in the program logic is inverted.
+        - For similar reasons, when we run an algorithm, we call its _process abstract method (technically, we call the instance as a method)
+        instead of its implementation, so any high-level calls of algorithms are not affected by low-level modifications. 
+
+- Explain the different dimensions dataset used (why it is important for evaluating the algorithm)
+    - Binpp Dataset
+        - Possible numbers of items are 50, 100, 200, 500, the capacity of bins is between 100 and 150, and the weights of items approximately 
+        lie between 10 and 100 (lower bound could vary). The dataset contains test files with various combinations of the item number,
+        capacity, and possible weights.
+    - Binpp-hard Dataset
+        - Contains a similar number of items to the Binpp dataset but comes with a much larger capacity per bin (i.e., 100000) and a larger
+        weight of each item (i.e., between 20000 and 35000)
+        - Guarantees the tested weights are generated with a wide distribution compared to the previous dataset.
+    - Jburbardt Dataset
+        - The range of the number of items, the capacity of bins, and item weight are similar to the Binpp dataset. However, in the optimal solutions, 
+        the Binpp dataset mostly results in less than 5 items per bin, but that number frequently goes above 5 in this dataset. 
+    - It is important to test algorithms on various dimensions because an algorithm can achieve unexpectedly outstanding performance in some cases
+    while poorly performing in other cases. Therefore, testing algorithms on more dimensions help to ensure fairness among algorithms and 
+    reduce the bias during benchmarking them. Furthermore, multi-dimension test cases aid us in acquiring a more thorough understanding
+    of the algorithms' performances, offering us a detailed analysis of them.
+
+T2 analysis:
+mention which part of the dataset you used for benchmarking, and why is your benchmarking protocol relevant
+    - The primary reason behind our selection to use the Binpp dataset to perform the benchmark is that it contains more data than the other two folders.
+    Specifically, it contains several files under the same parameters (i.e., n, c, w). In this way, we can acquire an unbiased result by taking
+    the average of the results under the same parameters, and the results are more algorithm-related rather than input-related.
+    - In terms of benchmark protocol, we decided to vary the value of n (number of items) and fix the value of c (capacity) and w (weight range).
+    There are several reasons for this.
+        1. We decided not to make c the changing variable since there are only 3 possible values of c, which makes it hard to conclude a general trend
+    out of the results. N, on the other hand, has more possible values, and it is the one that affects the result in the most observable way.
+        2. The larger the value w is, the less range any weight can exist in. With a smaller range of w, the datasets are more similar to each other, 
+    and it makes less difference for us to choose various algorithms. 
+        3. For a similar reason, a greater value of c also reduces the difference between datasets. Therefore, to maximize the effect of algorithms
+    on datasets, we decided to go with fixed values c = 1 and w = 1.
+
+    To benchmark the algorithms' execution time, we choose a file from the Binpp-hard folder since, as we concluded before, datasets in that
+    folder have more items and a wider range of weights, and the algorithms typically take longer to obtain a solution in those cases.
+    A longer average execution time makes the difference in the runtime of algorithms more observable, and it makes the output easier for us to conclude
+    the runtime performance of different online and offline algorithms. 
+
+Analyse the different algorithms:
+1. number of bins used
+    - The graph demonstrates how the number of bins used changes as the number of items needed to pack changes while the capacity of the bin and weight range
+      is constant. Each line represents the relation for different algorithms, and the number of bins used goes up proportionally to the increment 
+      of the number of items for all algorithms. Since the capacity and weight range are not changed, when there are more items had to be packed, it is
+      intuitive to conclude that the number of bins requested will increase.
+    - Overall, offline algorithms use remarkably fewer bins than online algorithms because the offline algorithm sorts the item reversely 
+      and packs the items in the order, which makes the offline algorithm see all the items before placing them into the bins compared to the online algorithm. Intuitively, when online
+      algorithms encounter a large-weight item lately in a sequence, the algorithms will struggle to find a suitable bin for it, and by a great chance,
+      they will create a new bin for the large-weight item. However, offline algorithms handle the large items first since the sequences are reversely
+      sorted. They can create bins for large items before placing other items, and fill in the unused space will less-weighted items later in the sequence.
+      Therefore, offline algorithms typically have better performance in terms of the number of bins used because they smartly use small items to fill up the bins.
+    - According to the number of bins used, it is obvious that three algorithms have worse performance than others (Online NextFit < Offline
+      NextFit < Online WorstFit). And that can conclude that the Nextfit algorithm has the worst performance that uses most bins because the NextFit algorithm
+      does not consider the situation when the packing item cannot fit in the current bin but can fit in previous bins, wasting lots of space.
+      The next worst algorithm is Online WorstFit. It fits the current item into the bin with the largest unused space. As a result, the small items come early
+      to occupy the space that larger items could have fit in, and consequently, we have to create a new bin for those larger items. This explains its poor
+      online version performance.
+    - Other five algorithms have a very similar output for the number of bins used, except Online FirstFit has slightly worse performance. Therefore, we use two other
+      KPIs to further distinguish and analyze each algorithm's performance.
+
+2. average unused room in the bins
+    - Generally, the average unused room in a bin stays stable while the number of items increases, except for 50 items, where more than half 
+    of the algorithms occupy less space in bins on average. Additionally, the unused room performance of algorithms mostly aligns with their performances in 
+    the number of bins used. This makes sense as when the solution has less unused room in each bin, each bin achieves a higher utilization ratio, and 
+    intuitively, fewer bins are required to hold all items.
+    - Offline algorithms typically take up more space in a bin, which has better performance than the online algorithm. More specifically, Online BestFit utilizes space
+    more wisely than Online FirstFit. It is an expected and reasonable result that BestFit chooses the bin with the least remaining space after adding the item while
+    FirstFit places the item in the first fit bin among previously created bins. Since the smallest empty space is left for the BestFit algorithm, the average unused room
+    will be less.
+    - Other three offline algorithms have similar outputs, and Offline FirstFit has worse performance than the other two due to the above reason. Additionally, Offline
+    BestFit and Offline WorstFit has almost the same outputs as the ascending number of items, especially for cases when the number of items is greater than 300.
+    Therefore, we will consider the third KPI, standard derivation of the loads for further analysis.
+
+3. standard derivation of the loads
+    - The general performances of algorithms are similar to other KPIs with a bit of "strange" behavior for particularly small N and large N. Specifically, offline 
+    FirstFit and BestFit perform unexpectedly disappointingly at N = 1, and online BestFit and FirstFit outperform online WorstFit only when N = 4. Below we explain
+    the reason for these anomalous situations.
+    - For N = 1, there could be cases where we have a couple of small items at the end of the item sequence that cannot fit into any bins. As a result, we have bins that are
+    filled and almost empty bins. Additionally, since N is small, the number of bins required is relatively small, and it is unable to balance out
+    the large numerator in the standard deviation formula. These extreme cases deviate from the average values of the standard deviation and result in irregularity.
+    - For N = 4, similarly, there may be extreme cases where BestFit and FirstFit result in outstandingly balanced weights and these cases lower the average standard deviation
+    of BestFit and FirstFit.
+    - One additional worth-noting phenomenon in this KPI is that Offline WorstFit performs significantly better than the rest of the algorithms. Therefore, this KPI is the best 
+    demonstration of the ability of Offline WorstFit to use small items to fill in the gaps.
+
+4. execution time
+    - The graph illustrates the logarithm (to enhance the readability) of the average execution time (ms) of each algorithm. It is noticeable that all Offline algorithms 
+    have longer execution time compared to Online algorithms, because Offline algorithms have to sort the list of items which takes O(NlogN) extra where N is the number of packing
+    items.
+    - Online NextFit uses a for loop to iterate through each item which requires only O(N) to process N items, and Online FirstFit has a similar execution time. Although it uses 
+    another while loop to go through each solution bin to find the first bin that can be fitted in, the break statement will stop the current loop after finding the right bin, the general
+    execution time will be similar to O(N) as NextFit compared to O(N^2) worst case. It is also intuitive that Online BestFit and WorstFit have similar execution times, and are obviously
+    longer than NextFit and FirstFit algorithms. Both of them take an additional while loop to iterate through all solution bins to find the corresponding correct bin, totally running O(N^2).
+    - Offline NextFit has the least running time among Offline algorithms because of using only a single loop to go through each item. The other three algorithms have similar execution times,
+    and it is caused by the same reason above that they all use another while loop to iterate through all solution bins. However, compared to Online FirstFIt, Offline FirstFit executes
+    with the longest running time as it goes through the sorted items reversely. The algorithm starts from the largest item, therefore, the first fitted bin will locate at the latter part
+    instead of at the beginning. The probability of running the entire while loop increases. Moreover, the execution time decreases in the order Offline FirstFit > Offline BestFit > Offline
+    WorstFit due to the decreasing number of bins created. When the number of solution bins becomes smaller, the length of the second while loop will decrease and reduces the execution time
+    at the same time.
+
+T3 analysis:
+In this analysis, we normalized the differences between the output of algorithms and the optimal solutions since those differences are more likely to be greater in larger datasets. We divided
+the original difference by the optimal solution to eliminate the effect of the datasets' size. As a result, by inspecting the resulting graph, we found the following problematic cases.
+
+Problematic cases (classes of cases) and reason:
+1. Jburkardt
+    - Almost all the algorithms are able to achieve the optimal solution in this dataset, particularly p_01, p_02, and p_03. We suppose the main reason is that the number of items in these datasets
+    is relatively small, and there are only a few ways for the algorithms to load the weights. We also found out that these datasets are designed in a way that some weights add up just over 
+    the bin's capacity. As a result, the ways to load weights are further restricted. Subsequently, the majority of the algorithms will have the same solution for these datasets, and they are all
+    identical to the optimal solution. Online NextFit, on the other hand, considering that its performance highly depends on the order of the input stream and its lack of ability to insert every examined
+    weight into an appropriate bin, it is understandable that it still performs poorly in one of the cases.
+2. Binpp folder N1C1W4
+    - A larger W-value stands for greater minimal weights of items, while a small C-value stands for less capacity of bins. For datasets in N1C1W4, the weights of items range from 30 to 100, and the 
+    capacity is 100 for each bin. As a result, no matter how the algorithms attempt to look for an appropriate bin to insert a weight, it is very unlikely for them to find an existing bin with sufficient
+    room to load it. Therefore, most of the bins in the solutions contain one or two items, and every algorithm generates a similar solution to the optimal solution. This serves as a general trend for 
+    datasets in N<n>C1W4.
+    - On a side note, a large W-value doesn't always imply a high probability of achieving optimal solutions. A small C-value is also required to limit the average number of items per bin. This provides
+    the explanation for greater deviations from the optimal solutions in the N1C3W4 dataset.
+3. Binpp folder where N4C2W2, N4C3W2
+    - Conversely, the cases inside folders N4C2W2 and N4C3W2 have different outputs for the NextFit algorithm from the above cases. The NextFit algorithm performs significantly poorly in these cases compared to other
+    algorithms. Due to a similar reason, when capacity becomes larger while minimal weight is smaller, other algorithms will find solutions with fewer bins and each bin contains more items. However,
+    The NextFit algorithm does not attempt to refill the previous bins, which results in more bins with fewer items. Therefore, the difference between the performance of NextFit and that of other algorithms 
+    is more observable in these cases.
+
+The biggest takeaway from this task is that, generally, when the items in a dataset possess a greater minimal weight, algorithms tend to achieve a better performance since items are packed as groups of one
+or two. The effect diminishes as the capacity of bins becomes larger as it allows bins to load more items, and more possibilities exist for algorithms to load items. Additionally, for small N-values, 
+algorithms are more likely to obtain optimal solutions.
+
+T4 analysis:
+    - After we integrated the Online Refined FirstFit algorithm's performance with the previous KPIs graphs, we can see that this new algorithm performs poorly in the case, even does not 
+    improve Online FirstFit.
+    - In the first graph, the number of bins used by Online Refined FirstFit is almost the same as Online FirstFit, the two lines are really close to each other. It is not surprising 
+    since both algorithms perform the task using the FirstFit algorithm. And Refined FirstFit only has extra steps trying to divide the items into different categories and using the items 
+    in the B2 class to refill the bins for the A1 class to reduce the number of bins used. If this does not make any improvement on the packing, this algorithm only spends extra efforts on 
+    categorizing all items and bins into 4 different classes, which does not make a significant difference.
+    - And the way this new algorithm implements this refilling is using heuristics (using mk th items in B2 and m is 6,7,8,9). Therefore, to make this heuristics useful, 
+    there need to be at least 6 elements that belong to B2 class. That's the reason why the average unused room for bins remarkably decreases as the number of items increases.
+    - Even though the number of items is large enough to have more B2 elements to refill the gaps of bins in the A1 class, the only improvement this new algorithm can achieve is to use 
+    ~4/10 elements (approximate 4 items in every 10 items) in B2. On the other hand, we lose the advantage of doing FirstFit on all bins as it is done in four parts separately. 
+    Combining the bare improvement and the unexpected disadvantage in the FirstFit domain, it is hard for Refined FirstFit to achieve better performance.
+    - The execution time for the Refined FirstFit algorithm is higher than the original FirstFit, which is reasonable because it spends more time normalizing and checking items' classes with
+    additional conditions.
+
+T5 analysis:
+    - To analyze the performance in T5, the only KPI that we need to consider is the standard deviation since the number of bins in this problem is fixed and our algorithm has to ensure the
+    loads in each bin are balanced. In our previous benchmarking, we evaluate and plot three KPIs(num of bins, average unused room, standard deviation) by running needed algorithms in selected
+    dataset folders and storing all solution bins and each KPI results in a dictionary. There also have plotting algorithms which contains three boolean variable indicating which KPI will be
+    displayed (nob, nr, stdv). For this reason, we can run different customized benchmarking by using different algorithms and getting different KPIs if utilizing it with the correct format.
+    Therefore, in this case, we only need to run the same benchmarking function using GNP algorithms and baseline to get the corresponding result dictionary. And then, graph the standard 
+    deviation result by setting nob and nr to False.
+
+    - The graph shows the standard deviation vs number of items of the baseline in the python library and the our implemented GNP algorithm. Since there is one line shown in the graph, we can
+    conclude that two algorithms have exactly the same result and standard deviation. Our implemented algorithm uses the greedy number partitioning algorithm which uses an array to keep track of
+    each bin's weight and add the next item to the bin has minimal weight throughout the whole bins. And this algorithm is similar to the algorithm that is used in baseline to-constant-bin-number
+    in the binpacking libraries. Therefore, the final results are the same for these two algorithms.
+
+    - We compare the results of these algorithms with the Offline WorstFit as the classical bin packing algorithm since it has the best overall performance based on our T2 investigation. From the standard deviation graph, when the number of items is less than 200, 
+    GNP will generate the sets of bins with more balanced loads compared to WorstFit. However, when the number of items is greater than 200, WorstFit can generate the sets of bins with lower 
+    standard deviation. From the graph of number of bins, we can see that WorstFit generates almost the same number of bins as the GNP algorithm, and in the meantime, the GNP algorithm 
+    uses the optimal number of bins as the fixed bin number. However, based on the continuous results from T3, Offline WorstFit does not always generate the optimal number of bins. Therefore,
+    when WorstFit uses more bins than the optimal number of bins, it will decrease the standard deviation of this set of bins, which is the reason why WorstFit can generate more balanced solutions
+    than GNP.
+
+Self-Reflection:
+
+What process did you go through to produce this result? (Backward)
+WY: To produce this result, I went through the process and started at understanding the given code and structures. After I get more ideas about the provided code base and understand
+the expected result of each task, I started to think about the implementation and how to design the structures of classes/functions. Based on the discussion and research on the question,
+we implement the actual code including graphing the results. Finally, we analyzed our results and enhanced the code by simplifying redundant codes.
+XZ: I went through approximately four stages. In the first stage, I did some basic planning on the project's structure and understood the code base. After that, I started to 
+do some research on relative algorithms and their implementations. I came up with multiple KPIs and use them to quantify the performance of algorithms in the next stage. I expanded
+the domain of this project to relative problems as well. As a close-up, I performed a check on the code our team wrote and reflected on our accomplishments.
+
+What were your standards for this piece of work? Did you meet your standards? (Inward)
+WY: My standards for this work includes an organized code structure without any redundant and repetitive work, well-defined relevant benchmark, and KPIs that can clearly demonstrate 
+algorithm's performance and users can use libraries easily.
+I think our work meets most of the standards. We involve three KPIs (num of bins used, average unused room, and standard derivation) in the benchmark, which is helpful for analyzing each algorithm
+with sufficient data support. And the graph uses different line type to distinguish online and offline algorithms. We also encapsulate many running algorithms into one main
+function so that we can run the code conveniently using that one function. However, there is room for improving the code structures.
+XZ: My standard for this piece of work contains several points.
+1. All functionalities of the project need to be well-modularized.
+2. Readability of the code is enhanced in some ways.
+3. People can easily add more features to what our team has done.
+We meet most of our standards. However, there are some functions (e.g., plotting) that still contain large blocks of code and are challenging to be reduced as more helper functions need 
+to be defined, which could sacrifice some readability. If more time is given, we could come up with a more efficient way to implement those functionalities.
+
+What the one thing you particularly want people to notice when they look at your work? (Outward)
+WY: We have an Analyst class that will obtain the discrete and continuous results for T3 and stores them in a dictionary. It reduces the complexity and time to run the code repeatedly to
+get results (it takes more than a minute to do so.). Users don't have to generate the result every time, and if a file exists, they can directly load that file to the class.
+XZ: In the BenchMarking class, we provided the user to perform benchmarking on all files in the Binpp dataset. That is, we provided users with the flexibility to observe how algorithms'
+performance varies with the number of items, capacity, or items' weight range. Not only users can obtain a wide range of results based on their requirements, but they can also choose which
+KPI they want to plot. Hence, the BenchMarking class offers users a wide range of functionalities while giving them the chance to decide what to use.
+
+What lessons will you keep from this reading/lecture in your professional practice? (Forward)
+WY: It is crucial to design an appropriate way to analyze benchmark algorithms. A proper way to do benchmarking helps programmers understand the performance of algorithms better, and 
+it could provide a more straightforward way to decide what algorithm to use. Also, a benchmark with multiple dimensions offers a thorough analysis of the algorithm and essentially tells 
+us which algorithm is the most appropriate in various cases.
+XZ: I learned that it is important to understand the entire project before getting started on any planning and implementation. Only focusing on one single step can lead to later 
+issues, for example, it may be harder to generalize some functionalities later on. Being aware of what we need to accomplish in the future can provide me with a broader understanding 
+of our essential goal and make it easier to generalize and modularize functionalities.
